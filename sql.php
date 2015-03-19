@@ -5,106 +5,32 @@
  */
 class sql
 {
-	const read = "read";
-	const write = "write";
-
 	/* Paramaters for this connection */
 	private $Server;
 	private $User;
 	private $Password;
+	public $Database;
+	
 	private $Ressource; // Object/Ressourse for SQL
-	private $Connection_Type; // should be PDO driver name
+	
 	private $Charset; // charset
 	
-	public $Database;
-	public $TransactionMode; // 1 for InnoDB(MySQL)/MsSQL in transaction mode, 0 for MyISAM(MySQL) 
-	public $Debug; // 1 to display all executed request 
+	public $TransactionMode; // 1 for InnoDB(MySQL)/MsSQL in transaction mode, 0 for MyISAM(MySQL)
 	
-	function __construct($constType = SQL::read)
-	{
-		if(empty($this->Ressource))
-		{
-			if (class_exists('PDO'))
-			{
-				if ( ($constType == SQL::write) && ( defined("DB_WHOST") ) )
-				{
-					$this->Server = DB_WHOST;
-					$this->User = DB_WUSER;
-					$this->Password = DB_WPASS;
-					$this->Database = DB_WNAME;
-					$this->Connection_Type = DB_WTYPE;
-	
-					if(defined("DB_CHARSET"))
-					{
-						$this->Charset = DB_WCHARSET;
-					}
-					else
-					{
-						$this->Charset = "UTF8";
-					}
-	
-					if(defined("TRANSACTIONW_MODE"))
-					{
-						$this->TransactionMode = TRANSACTIONW_MODE;
-					}
-					else
-					{
-						$this->TransactionMode = FALSE;
-					}
-	
-					if(defined("SQLW_DEBUG"))
-					{
-						$this->Debug = TRUE;
-					}
-					else
-					{
-						$this->Debug = FALSE;
-					}
-				}
-				else
-				{
-					$this->Server = DB_HOST;
-					$this->User = DB_USER;
-					$this->Password = DB_PASS;
-					$this->Database = DB_NAME;
-					$this->Connection_Type = DB_TYPE;
-					
-					if(defined("DB_CHARSET"))
-					{
-						$this->Charset = DB_CHARSET;
-					}
-					else
-					{
-						$this->Charset = "UTF8";
-					}
-					
-					if(defined("TRANSACTION_MODE"))
-					{
-						$this->TransactionMode = TRANSACTION_MODE;
-					}
-					else
-					{
-						$this->TransactionMode = FALSE;
-					}
-					
-					if(defined("SQL_DEBUG"))
-					{
-						$this->Debug = TRUE;
-					}
-					else
-					{
-						$this->Debug = FALSE;
-					}
-				}
-				$this->sql_connect();
-			}
-			else 
-			{
-				trigger_error("Could not find driver");
-			}
-		}
+	public $Debug; // 1 to display all executed request
 
-		return $this;
+	function sql($server, $user, $password, $database, $transactionmode = 0, $debug = 0, $charset = 'UTF8' )
+	{
+		$this->Server = $server;
+		$this->User = $user;
+		$this->Password = $password;
+		$this->Database = $database;
+		$this->Charset = $charset;
+		$this->TransactionMode = $transactionmode;
+		$this->Debug = $debug;
+	
+		$this->Ressource = $this->sql_connect();
+		$this->set_Datebase($this->Database);
 	}
 	
 	function get_Database()
@@ -129,150 +55,242 @@ class sql
 		return $this->Charset;
 	}
 	
-	/**
-	 * PDO::exec
-	 * @return mixed PDO exec return
-	 */
-	public function sql_query($query)
+	function sql_connect()
 	{
-		if ($this->Debug == 1)
-			echo "<p>".$query."</p>";
-		
 		try {
-				if(substr($query, 0, 6) == "SELECT" || substr($query, 0, 4) == "SHOW")
-				{					
-					$Results = $this->Ressource->query($query);
-				}
-				else 
-				{
-					$Results = $this->Ressource->exec($query);
-				}
-
+			$connectionstring = 'mysql:host='. $this->Server .';dbname='. $this->Database.";charset=UTF8";
 			
-		} catch (PDOException $Exception) {
-			$this->sql_error($Exception);
+			$this->Ressource = new PDO($connectionstring, $this->User, $this->Password);
+	
+		} catch (PDOException $e) {
+			$FileName = 'SQLLoginError.txt';
+			$LifeDelay = 5;
+			if ( (!file_exists($FileName)) || ( filemtime($FileName) < mktime(date("G"),(int)date("i")-$LifeDelay,date("s"),date("m"),date("d"),date("Y")) ) )
+			{
+				error_log("Mail le ".date("Y-m-d H:i:s"), 3, $FileName);
+				/*
+				 // Le mail
+				 $message = "Acces SQL Impossible ( PHP PDO ) sur ".$LinkSQLH." Utilisateur ".$LinkSQLU." (".$_SERVER['SERVER_NAME']." / ".$_SERVER['COMPUTERNAME'].")";
+				 $headers = 'From: support@akeo.fr' . "\r\nReply-To: support@akeo.fr";
+				 	
+				 ini_set( 'sendmail_from', "support@akeo.fr" );
+				 ini_set( 'SMTP', "mail.akeo.fr" );
+				 ini_set( 'smtp_port', 25 );
+				 // Envoi du mail
+				 mail('renaud.platel@gmail.com', 'Erreur SQL ( PHP PDO ) '.$_SERVER['COMPUTERNAME'], $message,$headers);
+				 */
+			}
+					
+			$this->Ressource = false;
 		}
 		
-		return $Results;
-	}
+		/*if (!($conn))
+		 header('Location: http://icmanager.ffbad/maintenance.php');
+		 */
+		
+		return $this->Ressource;
+	}	
 	
-	/**
-	 * @return row / field Value
-	 */
-	function sql_result($statement,$rowid,$field)
+	function sql_query($query)
 	{
-		$statement->execute();
-		$rows = $statement->fetchAll(PDO::FETCH_ASSOC);
-
-		return $rows[$rowid][$field];
+		try {
+			$statement = $this->Ressource->query($query);
+		}
+		catch (PDOException $e) {
+			echo "<p><u>Erreur SQL</u> : <b>".$e->errorInfo[2]."</b> :<br>";
+			$tableau = $e->getTrace();
+			foreach ($tableau as $key => $value)
+			{
+				echo "#".$key." -> ";
+				echo "Fichier : ".$value["file"]." Ligne : ".$value["line"];
+				if ( $value["function"] )
+					echo " Fonction ".$value["function"];
+				if ( $value["class"] )
+					echo " Fonction ".$value["class"];
+				echo "<br>";
+				$last = $value;
+			}
+			echo "Requête : ".$tableau["0"]["args"]["0"]."</p>";
+		}
+		return $statement;
 	}
-
-	/**
-	  * @return rows count
-	  */
-	 function sql_num_rows($statement)
-	 { 
-		  if (method_exists($statement,'rowCount'))
-		   return ($statement->rowCount());
-		  else
-		   return 0;
-	 }
 	
-	/**
-	 * @return fields count
-	 */
+	function sql_num_rows($statement)
+	{	
+		if ((!isset($statement->Count))||(is_null($statement->Count)))
+		{
+			try {
+				$statement->Count= count($statement->fetchAll());
+				$statement->execute();
+			}
+			catch (PDOException $e) {
+				$statement->Count = 0;
+			}
+		}
+		
+		return $statement->Count;
+	}
+	
+	function sql_result($statement,$Row,$Offset)
+	{
+		if ($Row == '')
+		{
+			$Row = 0;	
+		}
+		if ((!isset($statement->Result))||(is_null($statement->Result)))
+		{
+			try {
+				$Result = $statement->fetchAll(PDO::FETCH_BOTH);
+			} catch (PDOException $e) {
+			}
+			$i=0;
+			foreach ($Result as $row)
+			{
+				foreach ($row as $key => $value)
+				{
+					$ResultEnd[$i][strtolower($key)] = $value;
+				}
+				$i++;
+			}
+			
+			$statement->Result = $ResultEnd;
+		}
+	
+		return $statement->Result[$Row][strtolower($Offset)];
+	}
+	
 	function sql_num_fields($statement)
 	{
-		$row = $statement->fetch(PDO::FETCH_ASSOC);
-		
-		return count($row);
-	}
-	
-	/**
-	 * @deprecated
-	 * @return NULL
-	 */
-	function sql_close()
-	{
-		/**
-		 * Close PDO transaction
-		 */
-	}
-	
-	/**
-	 * @name PDO class statement fetch
-	 * @return mixed SQL results
-	 */
-	function sql_fetch_object($statement, $class = null)
-	{				
-		if(is_null($class))
+		if ((!isset($statement->Field))||(is_null($statement->Field)))
 		{
-			$Result = $statement->fetchObject();
-		}
-		else 
-		{			
-			if(class_exists($class))
-			{				
-				$Result = $statement->fetchObject($class);				
+			try {
+				$rows = $statement->fetch(PDO::FETCH_ASSOC);
+			} catch (PDOException $e) {
 			}
-			else 
-			{		
-				$Result = NULL;		
-				
-				trigger_error($class . " isn't callable");
-			}	
+			if ($rows)
+			{
+				foreach ($rows AS $key => $value)
+				{
+					$row[]=$key;
+				}
+				$statement->Field=$row;
+				$statement->execute();
+				return count($rows);
+			}
+			else
+				return 0;
 		}
-
-		return $Result;
+		else
+		{
+			return(count($statement->Field));
+		}
 	}
 	
-	/**
-	 * @name PDO statement 
-	 * @return count delete or update rows
-	 */
-	function sql_affected_rows($statement)
+	function sql_field_name($statement,$i)
+	{
+		if ((!isset($statement->Field))||(is_null($statement->Field)))
+		{
+			try {
+				$rows = $statement->fetch(PDO::FETCH_ASSOC);
+			} catch (PDOException $e) {
+			}
+			if ($rows)
+			{
+				foreach ($rows AS $key => $value)
+				{
+					$row[]=$key;
+				}
+				$statement->Field=$row;
+				$statement->execute();
+				return $row[$i];
+			}
+			else
+				return 0;
+		}
+		else
+		{
+			return($statement->Field[$i]);
+		}
+	}
+		
+	function sql_fetch_object ($statement, $classname = null)
+	{
+		try {
+			if ($classname == null)
+				$object = $statement->fetchObject();
+			else
+				$object = $statement->fetchObject($classname);
+		} catch (PDOException $e) {
+		}
+		return $object;
+	}
+	
+	function sql_fetch_array($statement)
+	{
+		try {
+			$array = $statement->fetch(PDO::FETCH_BOTH);
+		} catch (PDOException $e) {
+		}
+		
+		return $array;
+	}
+	
+	function sql_fetch_assoc($statement)
+	{
+		return sql_fetch_array($statement);
+	}
+	
+	function sql_fetch_row($statement)
+	{
+		try {
+			$array = $statement->fetch(PDO::FETCH_BOTH);
+		} catch (PDOException $e) {
+		}
+		return $array;
+	}
+	
+	function sql_get_last_message($objet = null)
+	{
+		if (is_null($objet))
+			Return "Fonctionne plus";
+		if (get_class($objet)=='PDO')
+			Return $objet->errorInfo();
+		if (get_class($objet->statement)=='PDOStatement')
+			Return $objet->errorInfo();
+	}
+	
+	function sql_rows_affected($statement)
 	{
 		return $statement->rowCount();
 	}
 	
-	/**
-	 * @name PDO statement
-	 * @offset column
-	 * @return count delete or update rows
-	 */
-	function sql_field_name($statement,$offset)
+	function sql_field_type($statement, $offset )
 	{
-		$valeur = $statement->getColumnMeta ( $offset );
-		return $valeur["name"];
+		$column = $statement->getColumnMeta($offset);
+		return(strtoupper($column["sqlsrv:decl_type"]));
 	}
 	
-	/**
-	 * @return last ID insert
-	 */
-	function sql_insert_id($name = NULL)
-	{	
-		return $this->Ressource->lastInsertId($name);
-	}
-	
-	/**
-	 * @name SQL list tables in BDD
-	 * @return mixed
-	 */
-	function sql_list_tables()
+	function sql_free_result($statement = null)
 	{
-		$results = $this->sql_query("SHOW tables");				
-		$results = $this->sql_fetch_array($results);
-		
-		return $results;
 	}
 	
-	/**
-	 * 
-	 * @name Exists table in BDD
-	 * @return boolean
-	 */
+	function sql_data_seek($statement,$rowid)
+	{
+		$statement->execute();
+		$i=0;
+		while ($i<$rowid)
+		{
+			sql_fetch_array($statement);
+			$i++;
+		}
+	}
+	
+	function sql_close($Variable = null)
+	{
+	}
+	
 	function sql_table_exists($tablename)
-	{		
+	{
 		$stmt = $this->sql_query("SHOW tables LIKE '".$tablename."'");
 		
 		if($this->sql_num_rows($stmt) === 0)
@@ -290,6 +308,23 @@ class sql
 	}
 	
 	/**
+	 * @name PDO statement
+	 * @return count delete or update rows
+	 */
+	function sql_affected_rows($statement)
+	{
+		return $statement->rowCount();
+	}
+	
+	/**
+	 * @return last ID insert
+	 */
+	function sql_insert_id($name = NULL)
+	{
+		return $this->Ressource->lastInsertId($name);
+	}
+	
+	/**
 	 *
 	 * @name table
 	 * @return name of primarykey if any (mysql)
@@ -297,7 +332,7 @@ class sql
 	function sql_primary_key($tablename)
 	{
 		$Result = $this->sql_query("SHOW COLUMNS FROM `".$tablename."`");
-		
+	
 		while ($row = $this->sql_fetch_object($Result))
 		{
 			if(trim($row->Key)=='PRI')
@@ -305,126 +340,8 @@ class sql
 				return $row->Field;
 			}
 		}
-		
+	
 		return null;
-	}
-	
-	/**
-	 * @name PDO error handler
-	 * @return Error Trigger
-	 */
-	function sql_error($PDOerror = NULL)
-	{
-		if(!is_null($PDOerror))
-		{
-			trigger_error("<p>PDO error : ". $PDOerror->getMessage( ) ."</p>", E_USER_WARNING); //warning for DAL
-		}
-		else 
-		{
-			return;
-		}
-		
-	}
-	
-	/**
-	 * @name PDO standart statement fetch
-	 * @return array of SQL results
-	 */
-	function sql_fetch_row($statement = NULL)
-	{		
-		try {
-			return $statement->fetch();
-		} catch (PDOException $e) {
-			echo "SQL::sql_fetch_row error : " . $e->getMessage();
-				
-			return NULL;
-		}
-	}
-	
-	/**
-	 * @name PDO standart statement fetch
-	 * @return array of SQL results
-	 */
-	function sql_fetch_array($statement = NULL)
-	{
-		try {
-			$statement->execute();
-			return $statement->fetchall();
-		} catch (PDOException $e) {
-			echo "SQL::sql_fetch_array error : " . $e->getMessage();
-				
-			return NULL;
-		}
-	}
-	
-	/**
-	 * @name PDO connection
-	 * @return PDOStatement
-	 */
-	private function sql_connect()
-	{
-		$charset = "SET NAMES ".$this->Charset;
-		
-		$options = array(
-				\PDO::MYSQL_ATTR_INIT_COMMAND => $charset,
-				\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION
-		);
-		
-		try {
-			$DSN = $this->Connection_Type.':host='. $this->Server .';dbname='. $this->Database;
-			$this->Ressource = new \PDO($DSN, $this->User, $this->Password, $options);
-    		
-		} catch (PDOException $e) {
-			echo 'Could not connect : <br>' . $e->getMessage();
-		}
-	}
-	
-	/**
-	 * @name PDO begin transaction
-	 * @return boolean
-	 */
-	function sql_starttransaction()
-	{
-		if($this->Ressource->beginTransaction())
-		{
-			return TRUE;
-		}
-		else
-		{
-			return FALSE;
-		}
-	}
-	
-	/**
-	 * @name PDO rollBack last transaction
-	 * @return boolean
-	 */
-	function sql_rollbacktransaction()
-	{
-		if($this->Ressource->rollBack())
-		{
-			return TRUE;
-		}
-		else
-		{
-			return FALSE;
-		}
-	}
-	
-	/**
-	 * @name PDO commit changes
-	 * @return boolean
-	 */
-	function sql_committransaction()
-	{
-		if($this->Ressource->commit())
-		{
-			return TRUE;
-		}
-		else
-		{
-			return FALSE;
-		}
 	}
 	
 	/**
@@ -437,5 +354,4 @@ class sql
 		return $this->Ressource->quote($val);
 	}
 }
-
 ?>
