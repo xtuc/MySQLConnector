@@ -71,13 +71,13 @@ class sql
 				/*
 				 // Le mail
 				 $message = "Acces SQL Impossible ( PHP PDO ) sur ".$LinkSQLH." Utilisateur ".$LinkSQLU." (".$_SERVER['SERVER_NAME']." / ".$_SERVER['COMPUTERNAME'].")";
-				 $headers = 'From: support@akeo.fr' . "\r\nReply-To: support@akeo.fr";
+				 $headers = 'From: ****@***.fr' . "\r\nReply-To: ****@****.fr";
 				 	
-				 ini_set( 'sendmail_from', "support@akeo.fr" );
-				 ini_set( 'SMTP', "mail.akeo.fr" );
+				 ini_set( 'sendmail_from', "****@****.fr" );
+				 ini_set( 'SMTP', "*****.fr" );
 				 ini_set( 'smtp_port', 25 );
 				 // Envoi du mail
-				 mail('renaud.platel@gmail.com', 'Erreur SQL ( PHP PDO ) '.$_SERVER['COMPUTERNAME'], $message,$headers);
+				 mail('******', 'Erreur SQL ( PHP PDO ) '.$_SERVER['COMPUTERNAME'], $message,$headers);
 				 */
 			}
 					
